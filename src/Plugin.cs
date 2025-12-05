@@ -4,6 +4,7 @@ using System.IO;
 using System.Collections.Generic;
 using System.Diagnostics;
 using UnityEngine;
+using System;
 
 #pragma warning disable CS0618
 [assembly: System.Security.Permissions.SecurityPermission(System.Security.Permissions.SecurityAction.RequestMinimum, SkipVerification = true)]
@@ -40,6 +41,16 @@ sealed class Plugin : BaseUnityPlugin
         Logger.LogMessage("[HotPalette] Loaded!");
 
         On.RoomCamera.Update += RoomCamera_Update;
+        On.AssetManager.ResolveFilePath_string += AssetManager_ResolveFilePath;
+    }
+
+    private string AssetManager_ResolveFilePath(On.AssetManager.orig_ResolveFilePath_string orig, string path)
+    {
+        // Overriding this function to don't search in the merge folder
+        // Load palette call this function, and the default is false, false
+        // But the user modify palette in his mod, not in merge
+        // So for dev, we will use the mods paths
+        return AssetManager.ResolveFilePath(path, true, false);
     }
 
     static bool changedThisFrame = false;
@@ -50,7 +61,7 @@ sealed class Plugin : BaseUnityPlugin
 
         UpdateWatchers(self.paletteA, self.paletteB);
 
-        var sw = Stopwatch.StartNew();
+        //var sw = Stopwatch.StartNew();
         TryReloadPalette(self, self.paletteA, ref self.fadeTexA);
         TryReloadPalette(self, self.paletteB, ref self.fadeTexB);
 
@@ -60,8 +71,8 @@ sealed class Plugin : BaseUnityPlugin
             changedThisFrame = false;
         }
 
-        sw.Stop();
-        UnityEngine.Debug.Log($"[HotPalette] Frame reload check: {sw.Elapsed.TotalMilliseconds} ms");
+        //sw.Stop();
+        //UnityEngine.Debug.Log($"[HotPalette] Frame reload check: {sw.Elapsed.TotalMilliseconds} ms");
     }
 
     void UpdateWatchers(int palA, int palB)

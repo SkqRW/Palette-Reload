@@ -1,10 +1,12 @@
-﻿{
+{
   "id": "seko.hotpalette",
-  "name": "Test Mod",
-  "version": "0.1.0",
+  "name": "Palette Reload",
+  "version": "0.3.0",
   "authors": "Seko",
-  "description": "Put a neat description here",
-  "tags": [],
+  "description": "Mod that allows palette hot reload",
+  "tags": [
+    "Tools"
+  ],
   "requirements": [],
   "requirements_names": [],
   "checksum_override_version": false
