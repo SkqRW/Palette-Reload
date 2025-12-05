@@ -1,0 +1,11 @@
+﻿{
+  "id": "seko.hotpalette",
+  "name": "Test Mod",
+  "version": "0.1.0",
+  "authors": "Seko",
+  "description": "Put a neat description here",
+  "tags": [],
+  "requirements": [],
+  "requirements_names": [],
+  "checksum_override_version": false
+}
