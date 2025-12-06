@@ -132,7 +132,7 @@ sealed class Plugin : BaseUnityPlugin
 
     private void TryReloadPalette(RoomCamera cam, int palID, ref Texture2D fadeTex)
     {
-        if (pendingReloads.Remove(palID))  // Remove devuelve true si existía
+        if (pendingReloads.Remove(palID)) 
         {
             cam.LoadPalette(palID, ref fadeTex);
             changedThisFrame = true;
