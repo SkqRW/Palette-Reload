@@ -21,10 +21,10 @@ sealed class Plugin : BaseUnityPlugin
     FileSystemWatcher watcherA;
     FileSystemWatcher watcherB;
 
-    static readonly Dictionary<int, byte[]> pendingReloads = new();
+    static readonly HashSet<int> pendingReloads = new();
 
-    int lastA = -1;
-    int lastB = -1;
+    int lastA = 0;
+    int lastB = 0;
 
     public void OnEnable()
     {
@@ -100,9 +100,7 @@ sealed class Plugin : BaseUnityPlugin
             watcher = null;
         }
 
-        if (id < 0) return;
-
-        string path = FindPaletteFile(id);
+        string path = AssetManager.ResolveFilePath($"Palettes/palette{id}.png", true, false);
         if (!File.Exists(path))
         {
             Logger.LogWarning($"[HotPalette] Palette {id} not found.");
@@ -113,13 +111,13 @@ sealed class Plugin : BaseUnityPlugin
         watcher.Path = Path.GetDirectoryName(path);
         watcher.Filter = Path.GetFileName(path);
         watcher.NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size;
-        watcher.Changed += (s, e) => OnPaletteChanged(id, e.FullPath);
+        watcher.Changed += (s, e) => OnPaletteChanged(id);
         watcher.EnableRaisingEvents = true;
 
         //Logger.LogMessage($"[HotPalette] Observing palette {id} → {path}");
     }
 
-    void OnPaletteChanged(int id, string fullPath)
+    void OnPaletteChanged(int id)
     {
         /*
                 ()____()
@@ -128,50 +126,16 @@ sealed class Plugin : BaseUnityPlugin
             ____/      )
 
         */
-        try
-        {
-            byte[] data = File.ReadAllBytes(fullPath);
-            pendingReloads[id] = data;
-        }
-        catch { 
-            Logger.LogWarning($"[HotPalette] Could not read modified palette {id}.");
-        }
+        pendingReloads.Add(id);
     }
 
-    string FindPaletteFile(int id)
-    {
-        string path = $"Palettes/palette{id}.png";
-        return AssetManager.ResolveFilePath(path);
-    }
 
     private void TryReloadPalette(RoomCamera cam, int palID, ref Texture2D fadeTex)
     {
-        if (!pendingReloads.TryGetValue(palID, out byte[] newFileData))
-            return;
-
-        if (TextureDifferent(fadeTex, newFileData))
+        if (pendingReloads.Remove(palID))  // Remove devuelve true si existía
         {
             cam.LoadPalette(palID, ref fadeTex);
             changedThisFrame = true;
         }
-
-        pendingReloads.Remove(palID);
-    }
-
-    private bool TextureDifferent(Texture2D tex, byte[] fileData)
-    {
-        if (tex == null) return true;
-
-        byte[] texBytes = tex.GetRawTextureData();
-
-        // Just in case, unity...
-        if (fileData.Length != texBytes.Length)
-            return true;
-
-        for (int i = 0; i < texBytes.Length; i++)
-            if (texBytes[i] != fileData[i])
-                return true;
-
-        return false;
     }
 }
