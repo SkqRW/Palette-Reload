@@ -12,7 +12,7 @@ using System;
 
 namespace HotPalette;
 
-[BepInPlugin("seko.hotpalette", "Palette Hot Reload", "0.3.0")]
+[BepInPlugin("seko.hotpalette", "Palette Hot Reload", "0.4")]
 sealed class Plugin : BaseUnityPlugin
 {
     public static new ManualLogSource Logger;
@@ -41,16 +41,6 @@ sealed class Plugin : BaseUnityPlugin
         Logger.LogMessage("[HotPalette] Loaded!");
 
         On.RoomCamera.Update += RoomCamera_Update;
-        On.AssetManager.ResolveFilePath_string += AssetManager_ResolveFilePath;
-    }
-
-    private string AssetManager_ResolveFilePath(On.AssetManager.orig_ResolveFilePath_string orig, string path)
-    {
-        // Overriding this function to don't search in the merge folder
-        // Load palette call this function, and the default is false, false
-        // But the user modify palette in his mod, not in merge
-        // So for dev, we will use the mods paths
-        return AssetManager.ResolveFilePath(path, true, false);
     }
 
     static bool changedThisFrame = false;
@@ -134,8 +124,39 @@ sealed class Plugin : BaseUnityPlugin
     {
         if (pendingReloads.Remove(palID)) 
         {
-            cam.LoadPalette(palID, ref fadeTex);
+            LoadPalette(cam, palID, ref fadeTex);
             changedThisFrame = true;
         }
+    }
+
+    private void LoadPalette(RoomCamera cam, int pal, ref Texture2D texture)
+    {
+        if (texture != null)
+			UnityEngine.Object.Destroy(texture);
+		
+		texture = new Texture2D(32, 16, TextureFormat.ARGB32, false);
+
+        string palettePath = AssetManager.ResolveFilePath(
+            $"Palettes{Path.DirectorySeparatorChar}palette{pal}.png", 
+            true, 
+            false
+        );
+
+		try
+		{
+			AssetManager.SafeWWWLoadTexture(ref texture, $"file:///{palettePath}", false, true);
+		}
+		catch (FileLoadException)
+		{
+			palettePath = AssetManager.ResolveFilePath($"Palettes{Path.DirectorySeparatorChar}palette-1.png", true, false);
+			AssetManager.SafeWWWLoadTexture(ref texture, $"file:///{palettePath}", false, true);
+		}
+
+		var (colorA, colorB) = (cam.room != null)
+                                ? (cam.room.roomSettings.EffectColorA, cam.room.roomSettings.EffectColorB)
+                                : (-1, -1);
+
+        cam.ApplyEffectColorsToPaletteTexture(ref texture, colorA, colorB);
+		texture.Apply(false);
     }
 }
