@@ -13,7 +13,7 @@ using System;
 namespace HotPalette;
 
 [BepInPlugin("seko.hotpalette", "Palette Hot Reload", "0.4")]
-sealed class Plugin : BaseUnityPlugin
+sealed class ModPlugin : BaseUnityPlugin
 {
     public static new ManualLogSource Logger;
     bool isInit;
@@ -48,6 +48,11 @@ sealed class Plugin : BaseUnityPlugin
     private void RoomCamera_Update(On.RoomCamera.orig_Update orig, RoomCamera self)
     {
         orig(self);
+
+        if (!self.game.devToolsActive){
+            // A del tool thing a guess
+            return;
+        }
 
         UpdateWatchers(self.paletteA, self.paletteB);
 
