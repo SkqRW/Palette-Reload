@@ -7,3 +7,5 @@ About performance, this mod only takes 0.02 ms on average to check in each frame
 Issues, recomendation or pull request are welcome.
 
 You can contact me via Discord: @skq_rw
+
+Thanks to magicajaphet for make me realize possible troubles with mod compatibility in some part of my code
