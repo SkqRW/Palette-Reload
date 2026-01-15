@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using UnityEngine;
 using System;
+using System.Linq;
 
 #pragma warning disable CS0618
 [assembly: System.Security.Permissions.SecurityPermission(System.Security.Permissions.SecurityAction.RequestMinimum, SkipVerification = true)]
@@ -18,13 +19,6 @@ sealed class ModPlugin : BaseUnityPlugin
     public static new ManualLogSource Logger;
     bool isInit;
 
-    FileSystemWatcher watcherA;
-    FileSystemWatcher watcherB;
-
-    static readonly HashSet<int> pendingReloads = new();
-
-    int lastA = 0;
-    int lastB = 0;
 
     public void OnEnable()
     {
@@ -41,9 +35,37 @@ sealed class ModPlugin : BaseUnityPlugin
         Logger.LogMessage("[HotPalette] Loaded!");
 
         On.RoomCamera.Update += RoomCamera_Update;
+        On.DevInterface.TerrainPanel.GetPalettes += DevInterface_TerrainPanel_GetPalettes;
     }
 
-    static bool changedThisFrame = false;
+    private List<string> DevInterface_TerrainPanel_GetPalettes(On.DevInterface.TerrainPanel.orig_GetPalettes orig, DevInterface.TerrainPanel self, bool fade)
+    {
+        //Just only accept .png files in the dev tools view
+        List<string> list = (from name in AssetManager.ListDirectory("terrainpalettes", false, false, false)
+                            where name.EndsWith(".png")
+                            select name).Select(new Func<string, string>(Path.GetFileNameWithoutExtension)).ToList<string>();
+        list.Insert(0, "NO PALETTE");
+        if (!fade)
+        {
+            list.Insert(0, "INHERIT");
+        }
+        return list;
+    }
+
+    static bool changedThisFrame = true;
+
+    
+    FileSystemWatcher watcherA;
+    FileSystemWatcher watcherB;
+    FileSystemWatcher watcherTerrainA;
+
+    static readonly HashSet<int> pendingReloads = new();
+    static readonly HashSet<string> pendingTerrainReloads = new();
+
+    int lastA = 0;
+    int lastB = 0;
+    string lastTerrainA = "";
+
 
     private void RoomCamera_Update(On.RoomCamera.orig_Update orig, RoomCamera self)
     {
@@ -53,24 +75,33 @@ sealed class ModPlugin : BaseUnityPlugin
             // A del tool thing a guess
             return;
         }
+        var sw = Stopwatch.StartNew();
 
-        UpdateWatchers(self.paletteA, self.paletteB);
-
-        //var sw = Stopwatch.StartNew();
+        UpdateWatchers(self.paletteA, self.paletteB, self.terrainPalette.MainPaletteName);
         TryReloadPalette(self, self.paletteA, ref self.fadeTexA);
         TryReloadPalette(self, self.paletteB, ref self.fadeTexB);
+        TryReloadTerrainPalette(self, self.terrainPalette.MainPaletteName, self.terrainPalette.FadePaletteName);
 
         if (changedThisFrame)
         {
             self.ApplyFade();
+
+            self.terrainPalette = new TerrainPalette(self.terrainPalette.MainPaletteName, self.terrainPalette.FadePaletteName);
+            self.ReloadTerrainPalette();
+
+            self.terrainPalette = new TerrainPalette(self.terrainPalette.MainPaletteName, self.terrainPalette.FadePaletteName);
+            self.ReloadTerrainPalette();
+
             changedThisFrame = false;
         }
 
-        //sw.Stop();
-        //UnityEngine.Debug.Log($"[HotPalette] Frame reload check: {sw.Elapsed.TotalMilliseconds} ms");
+        sw.Stop();
+        UnityEngine.Debug.Log($"[HotPalette] Frame reload check: {sw.Elapsed.TotalMilliseconds} ms");
     }
 
-    void UpdateWatchers(int palA, int palB)
+    
+
+    void UpdateWatchers(int palA, int palB, string terrainA)
     {
         if (palA != lastA)
         {
@@ -83,6 +114,39 @@ sealed class ModPlugin : BaseUnityPlugin
             lastB = palB;
             ConfigureWatcher(ref watcherB, palB);
         }
+
+        if (terrainA != lastTerrainA)
+        {
+            lastTerrainA = terrainA;
+            ConfigureTerrainWatcher(ref watcherTerrainA, terrainA);
+        }
+    }
+
+    private void ConfigureTerrainWatcher(ref FileSystemWatcher watcherTerrainA, string terrainA)
+    {
+        // Destroy previous watcher
+        if (watcherTerrainA != null)
+        {
+            watcherTerrainA.EnableRaisingEvents = false;
+            watcherTerrainA.Dispose();
+            watcherTerrainA = null;
+        }
+
+        string path = AssetManager.ResolveFilePath($"terrainpalettes/{terrainA}.png", true, false);
+        if (!File.Exists(path))
+        {
+            Logger.LogWarning($"[HotPalette] Terrain palette {terrainA} not found.");
+            return;
+        }
+
+        watcherTerrainA = new FileSystemWatcher();
+        watcherTerrainA.Path = Path.GetDirectoryName(path);
+        watcherTerrainA.Filter = Path.GetFileName(path);
+        watcherTerrainA.NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size;
+        watcherTerrainA.Changed += (s, e) => pendingTerrainReloads.Add(terrainA);
+        watcherTerrainA.EnableRaisingEvents = true;
+
+        //Logger.LogMessage($"[HotPalette] Observing terrain palette → {path}");
     }
 
     void ConfigureWatcher(ref FileSystemWatcher watcher, int id)
@@ -106,24 +170,20 @@ sealed class ModPlugin : BaseUnityPlugin
         watcher.Path = Path.GetDirectoryName(path);
         watcher.Filter = Path.GetFileName(path);
         watcher.NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size;
-        watcher.Changed += (s, e) => OnPaletteChanged(id);
+        watcher.Changed += (s, e) => pendingReloads.Add(id);
         watcher.EnableRaisingEvents = true;
 
         //Logger.LogMessage($"[HotPalette] Observing palette {id} → {path}");
     }
 
-    void OnPaletteChanged(int id)
+    private void TryReloadTerrainPalette(RoomCamera cam, string mainPaletteName, string fadePaletteName)
     {
-        /*
-                ()____()
-	            | O - O)      WAWA
-	            |      |
-            ____/      )
-
-        */
-        pendingReloads.Add(id);
+        if (pendingTerrainReloads.Remove(mainPaletteName))
+        {
+            UnityEngine.Debug.Log($"[HotPalette] Reloading terrain palette {mainPaletteName}");
+            changedThisFrame = true;
+        }
     }
-
 
     private void TryReloadPalette(RoomCamera cam, int palID, ref Texture2D fadeTex)
     {
