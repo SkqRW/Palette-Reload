@@ -55,7 +55,6 @@ sealed class ModPlugin : BaseUnityPlugin
     static bool changedThisFramePalette = true;
     static bool changedThisFrameTerrain = true;
 
-    
     FileSystemWatcher watcherA;
     FileSystemWatcher watcherB;
     FileSystemWatcher watcherTerrainA;
@@ -73,8 +72,13 @@ sealed class ModPlugin : BaseUnityPlugin
     {
         orig(self);
 
-        if (!self.game.devToolsActive){
-            // A del tool thing a guess
+        if (self?.game?.devToolsActive != true)
+        {
+            return;
+        }
+
+        if (self.terrainPalette == null)
+        {
             return;
         }
         //var sw = Stopwatch.StartNew();
