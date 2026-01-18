@@ -1,7 +1,7 @@
 {
-  "id": "seko.hotpalette",
+  "id": "seko.palettereload",
   "name": "Palette Reload",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "authors": "Seko",
   "description": "Mod that allows palette hot reload, rooms and terrain palettes.",
   "tags": [

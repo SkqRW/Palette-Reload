@@ -13,7 +13,7 @@ using System.Linq;
 
 namespace PaletteReload;
 
-[BepInPlugin("seko.PaletteReload", "Palette Reload", "0.4")]
+[BepInPlugin("seko.palettereload", "Palette Reload", "0.5.2")]
 sealed class ModPlugin : BaseUnityPlugin
 {
     public static new ManualLogSource Logger;
@@ -32,10 +32,12 @@ sealed class ModPlugin : BaseUnityPlugin
         if (isInit) return;
         isInit = true;
 
-        Logger.LogMessage("[PaletteReload] Loaded!");
 
         On.RoomCamera.Update += RoomCamera_Update;
         On.DevInterface.TerrainPanel.GetPalettes += DevInterface_TerrainPanel_GetPalettes;
+
+        Logger.LogMessage("[PaletteReload] Loaded!");
+
     }
 
     private List<string> DevInterface_TerrainPanel_GetPalettes(On.DevInterface.TerrainPanel.orig_GetPalettes orig, DevInterface.TerrainPanel self, bool fade)
@@ -77,22 +79,27 @@ sealed class ModPlugin : BaseUnityPlugin
             return;
         }
 
-        if (self.terrainPalette == null)
-        {
-            return;
-        }
+        
         //var sw = Stopwatch.StartNew();
 
-        UpdateWatchers(self.paletteA, self.paletteB, self.terrainPalette.MainPaletteName, self.terrainPalette.FadePaletteName);
+        UpdateWatchers(self.paletteA, self.paletteB);
         TryReloadPalette(self, self.paletteA, ref self.fadeTexA);
         TryReloadPalette(self, self.paletteB, ref self.fadeTexB);
-        TryReloadTerrainPalette(self, self.terrainPalette.MainPaletteName, self.terrainPalette.FadePaletteName);
 
         if (changedThisFramePalette)
         {
             self.ApplyFade();
             changedThisFramePalette = false;
         }
+
+        if (self.terrainPalette == null)
+        {
+            return;
+        }
+
+        UpdateTerrainWatchers(self.terrainPalette.MainPaletteName, self.terrainPalette.FadePaletteName);
+        TryReloadTerrainPalette(self, self.terrainPalette.MainPaletteName, self.terrainPalette.FadePaletteName);
+
 
         if (changedThisFrameTerrain)
         {
@@ -110,9 +117,22 @@ sealed class ModPlugin : BaseUnityPlugin
         //UnityEngine.Debug.Log($"[PaletteReload] Frame reload check: {sw.Elapsed.TotalMilliseconds} ms");
     }
 
-    
+    private void UpdateTerrainWatchers(string terrainA, string terrainB)
+    {
+        if (terrainA != lastTerrainA)
+        {
+            lastTerrainA = terrainA;
+            ConfigureTerrainWatcher(ref watcherTerrainA, terrainA);
+        }
 
-    void UpdateWatchers(int palA, int palB, string terrainA, string terrainB)
+        if (terrainB != lastTerrainB)
+        {
+            lastTerrainB = terrainB;
+            ConfigureTerrainWatcher(ref watcherTerrainB, terrainB);
+        }
+    }
+
+    void UpdateWatchers(int palA, int palB)
     {
         if (palA != lastA)
         {
@@ -126,17 +146,7 @@ sealed class ModPlugin : BaseUnityPlugin
             ConfigurPaletteWatcher(ref watcherB, palB);
         }
 
-        if (terrainA != lastTerrainA)
-        {
-            lastTerrainA = terrainA;
-            ConfigureTerrainWatcher(ref watcherTerrainA, terrainA);
-        }
-
-        if (terrainB != lastTerrainB)
-        {
-            lastTerrainB = terrainB;
-            ConfigureTerrainWatcher(ref watcherTerrainB, terrainB);
-        }
+        
     }
 
     void ConfigurPaletteWatcher(ref FileSystemWatcher watcher, int id)
@@ -163,7 +173,7 @@ sealed class ModPlugin : BaseUnityPlugin
         watcher.Changed += (s, e) => pendingReloads.Add(id);
         watcher.EnableRaisingEvents = true;
 
-        //Logger.LogMessage($"[PaletteReload] Observing palette {id} → {path}");
+        UnityEngine.Debug.Log($"[PaletteReload] Observing palette {id} → {path}");
     }
 
     private void ConfigureTerrainWatcher(ref FileSystemWatcher watcherTerrainA, string terrainA)
@@ -190,7 +200,7 @@ sealed class ModPlugin : BaseUnityPlugin
         watcherTerrainA.Changed += (s, e) => pendingTerrainReloads.Add(terrainA);
         watcherTerrainA.EnableRaisingEvents = true;
 
-        //Logger.LogMessage($"[PaletteReload] Observing terrain palette → {path}");
+        UnityEngine.Debug.Log($"[PaletteReload] Observing terrain palette → {path}");
     }
 
     private void TryReloadTerrainPalette(RoomCamera cam, string mainPaletteName, string fadePaletteName)
